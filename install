@@ -1,0 +1,103 @@
+#!/bin/zsh
+
+# Sources:
+# https://medium.com/@jeantimex/how-to-configure-iterm2-and-vim-like-a-pro-on-macos-e303d25d5b5c
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+WHITE='\033[0;37m'
+BLUE='\033[0;34m'
+BROWN='\033[0;33m'
+DGRAY='\033[0;30m'
+LGRAY='\033[0;37m'
+NC='\033[0m'
+CLTEST="/Library/Developer/CommandLineTools/SDKs"
+PKGFILE="./packages.txt"
+
+read_package_file() {
+    local obj=$1
+    local key=$2
+    local file=$3
+    awk '/^\[.*\]$/{obj=$0}/=/{print obj $0}' $file \
+        | grep '^\['$obj'\]'$key'=' \
+        | perl -pe 's/.*=//'
+}
+
+brew_install() {
+    if brew list $1 &>/dev/null; then
+        print "${1} is already installed"
+    else
+        brew install $1 && print "${GREEN}$1${NC} is installed."
+    fi
+}
+
+print ""
+print "${YELLOW}WARNING${NC}:"
+print "User must be allowed to install software on this pc and specifically install homebrew"
+read "confirm?without root consent. Continue? [Y/N]: " 
+if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+    print ""
+else
+    exit 0
+fi
+
+# Check if xcode is installed
+xcode_output="$(xcode-select -p)"
+xcode_array=( "/Applications/Xcode.app/Contents/Developer" "/Library/Developer/CommandLineTools" )
+
+
+xcode_check=false
+for xcode_string in "$xcode_array[@]";
+do 
+    if [[ $xcode_output =~ $xcode_string ]]; then
+        xcode_check=true
+    fi
+done
+
+if [[ $xcode_check = false ]]; then
+    print "${RED}ERROR${NC}: XCODE is not installed. Install from this link: https://apps.apple.com/no/app/xcode/id497799835?mt=12 "
+    exit
+fi
+
+# Check if xcode-command tools is installed
+if [[ ! -d ${CLTEST} ]]; then
+    print "${YELLOW}WARNING${NC}:"
+    read "XCode Command Line Tools is not installed, but is required to continue. Install? [Y/N]: "
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        xcode-select --install
+    else
+        exit 1
+    fi
+fi      
+
+# Check if homebrew is installed
+which -s brew >/dev/null
+if [[ $? != 0 ]]; then
+    print "${YELLOW}WARNING${NC}:"
+    read "Homebrew is not installed, but is required to continue. Install? [Y/N]: "
+    if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+        ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    else
+        exit 1
+    fi
+fi
+
+print "${GREEN}All prerequisites are installed. Updating brew installation...${NC}"
+print ""
+brew update
+brew tap homebrew/cask-fonts
+
+#homebrew_packages=$(read_package_file homebrew)
+
+# Get all lines between [homebrew] section and next section (or End-Of-File) and exclude empty lines.
+homebrew_packages=$(awk '/\[homebrew\]/{ f = 1; next }/\[*\]/{ f = 0 } f' packages.txt) 
+
+while IFS= read -r homebrew_package; do
+    if [ ! -z "$homebrew_package" -a "$homebrew_package" != " " ]; then
+        brew_install $homebrew_package
+    fi
+done <<< "$homebrew_packages"
+
+
+
